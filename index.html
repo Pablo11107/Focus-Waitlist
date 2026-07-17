@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>FOCUS. — Lista de espera</title>
+  <meta name="description" content="Apúntate a la lista de espera de FOCUS. y sé de los primeros en probarla.">
+
+  <meta name="theme-color" content="#0a0a10">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,700;0,900;1,900&display=swap"
+    rel="stylesheet"
+  >
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --verde: #57e32c;
+      --verde-glow: rgba(87, 227, 44, 0.55);
+      --fondo: #0a0a10;
+      --panel: rgba(18, 18, 26, 0.82);
+      --borde: #2c2c36;
+      --texto: #f2f2f5;
+      --texto-suave: #9a9aa6;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(120% 90% at 50% 30%, #16161f 0%, #0a0a10 55%, #050508 100%);
+      color: var(--texto);
+      overflow: hidden;
+    }
+
+    /* ============ Escena 3D ============ */
+    #webgl {
+      position: fixed;
+      inset: 0;
+      display: block;
+      transition: opacity 0.6s ease;
+    }
+    body.show-form #webgl { opacity: 0; pointer-events: none; }
+
+    /* Fundido inicial desde negro */
+    #fade {
+      position: fixed; inset: 0;
+      background: #000;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 0.3s linear;
+      z-index: 4;
+    }
+
+    /* Viñeteado que se cierra al acercarnos al objetivo */
+    #vignette {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(circle at 50% 50%,
+        transparent 30%, rgba(0,0,0,0.55) 62%, #000 92%);
+      z-index: 3;
+    }
+
+    /* Destello al "atravesar" la lente */
+    #flash {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(circle at 50% 50%, #fff 0%, rgba(255,255,255,0.6) 35%, transparent 75%);
+      z-index: 5;
+    }
+    #flash.go { animation: flashLens 0.55s ease-out forwards; }
+    @keyframes flashLens {
+      0%   { opacity: 0; }
+      25%  { opacity: 0.95; }
+      100% { opacity: 0; }
+    }
+
+    /* Marca y botón de saltar durante la intro */
+    #intro-ui {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 6;
+      opacity: 0;
+      transition: opacity 0.8s ease 0.4s;
+    }
+    body.intro-ready #intro-ui { opacity: 1; }
+    body.show-form #intro-ui { display: none; }
+
+    #intro-brand {
+      position: absolute;
+      top: max(1.4rem, env(safe-area-inset-top));
+      left: 1.6rem;
+      font-weight: 900;
+      font-size: 1.25rem;
+      letter-spacing: 0.04em;
+    }
+
+    #skip {
+      position: absolute;
+      top: max(1.4rem, env(safe-area-inset-top));
+      right: 1.6rem;
+      pointer-events: auto;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: var(--texto);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.55rem 1rem;
+      border-radius: 999px;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    #skip:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.35); }
+
+    #intro-hint {
+      position: absolute;
+      bottom: max(1.6rem, env(safe-area-inset-bottom));
+      width: 100%;
+      text-align: center;
+      font-size: 0.8rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--texto-suave);
+    }
+
+    /* ============ Pantalla del formulario (el "visor" de la cámara) ============ */
+    #form-screen {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      padding: 1.2rem;
+    }
+    body.show-form #form-screen { display: flex; }
+
+    /* Todo lo que se ve por el visor: primero desenfocado, la cámara "caza" el foco y clava */
+    #viewfinder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.2rem;
+    }
+    body.show-form #viewfinder { animation: focusHunt 1.9s cubic-bezier(0.3, 0, 0.2, 1) forwards; }
+    @keyframes focusHunt {
+      0%   { filter: blur(26px) brightness(1.25); transform: scale(1.06); }
+      38%  { filter: blur(5px)  brightness(1.08); transform: scale(1.02); }
+      55%  { filter: blur(12px) brightness(1.12); transform: scale(1.03); }
+      78%  { filter: blur(2px); }
+      100% { filter: blur(0) brightness(1); transform: scale(1); }
+    }
+
+    /* Rejilla de tercios, como en un visor real */
+    .grid-line { position: absolute; background: rgba(255,255,255,0.05); pointer-events: none; }
+    .grid-v { top: 0; bottom: 0; width: 1px; }
+    .grid-h { left: 0; right: 0; height: 1px; }
+
+    /* HUD del visor */
+    .hud {
+      position: absolute;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: rgba(255,255,255,0.55);
+      pointer-events: none;
+      text-transform: uppercase;
+    }
+    .hud-tl { top: max(1.3rem, env(safe-area-inset-top)); left: 1.5rem; font-weight: 900; font-size: 1.05rem; letter-spacing: 0.04em; color: var(--texto); text-transform: none; }
+    .hud-tr { top: max(1.5rem, env(safe-area-inset-top)); right: 1.5rem; color: var(--verde); text-shadow: 0 0 8px var(--verde-glow); }
+    .hud-bl { bottom: max(1.4rem, env(safe-area-inset-bottom)); left: 1.5rem; }
+    .hud-br { bottom: max(1.4rem, env(safe-area-inset-bottom)); right: 1.5rem; display: flex; align-items: center; gap: 0.45rem; }
+
+    .battery {
+      width: 22px; height: 11px;
+      border: 1.5px solid rgba(255,255,255,0.55);
+      border-radius: 2px;
+      position: relative;
+    }
+    .battery::before {
+      content: ''; position: absolute; inset: 1.5px;
+      right: 30%; background: var(--verde); border-radius: 1px;
+    }
+    .battery::after {
+      content: ''; position: absolute;
+      right: -4px; top: 2.5px; width: 2.5px; height: 4px;
+      background: rgba(255,255,255,0.55); border-radius: 0 1px 1px 0;
+    }
+
+    /* Tarjeta central con el marco de enfoque (esquinas verdes, como TrueFocus) */
+    #card-wrap { position: relative; width: min(440px, 94vw); }
+
+    #af-frame { position: absolute; inset: -14px; pointer-events: none; opacity: 0; }
+    body.show-form #af-frame { animation: afLock 0.9s steps(1) 1.55s forwards; }
+    @keyframes afLock {
+      0%   { opacity: 1; }
+      22%  { opacity: 0; }
+      44%  { opacity: 1; }
+      66%  { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    .corner {
+      position: absolute; width: 1.1rem; height: 1.1rem;
+      border: 3px solid var(--verde);
+      filter: drop-shadow(0 0 5px var(--verde-glow));
+      border-radius: 3px;
+    }
+    .corner.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
+    .corner.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
+    .corner.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
+    .corner.br { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+    #card {
+      background: var(--panel);
+      border: 1px solid var(--borde);
+      border-radius: 18px;
+      padding: 2.1rem 1.9rem;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+    }
+
+    #card h1 {
+      font-size: clamp(1.6rem, 5.5vw, 2rem);
+      font-weight: 900;
+      line-height: 1.15;
+      margin-bottom: 0.6rem;
+    }
+    #card h1 .verde { color: var(--verde); text-shadow: 0 0 14px var(--verde-glow); }
+
+    #card p.sub {
+      color: var(--texto-suave);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 1.6rem;
+    }
+
+    .field { margin-bottom: 1rem; }
+    .field label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--texto-suave);
+      margin-bottom: 0.4rem;
+    }
+    .field input {
+      width: 100%;
+      background: #14141b;
+      border: 1px solid var(--borde);
+      border-radius: 12px;
+      color: var(--texto);
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 0.85rem 1rem;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .field input:focus {
+      border-color: var(--verde);
+      box-shadow: 0 0 0 3px rgba(87, 227, 44, 0.18);
+    }
+    .field input::placeholder { color: #55555f; }
+
+    #submit-btn {
+      width: 100%;
+      margin-top: 0.4rem;
+      background: var(--verde);
+      color: #06120a;
+      border: none;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+      padding: 0.95rem 1rem;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      box-shadow: 0 8px 28px rgba(87, 227, 44, 0.28);
+    }
+    #submit-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 34px rgba(87, 227, 44, 0.4); }
+    #submit-btn:disabled { opacity: 0.55; cursor: default; }
+
+    #form-error {
+      display: none;
+      margin-top: 0.9rem;
+      font-size: 0.85rem;
+      color: #ff6b6b;
+      line-height: 1.4;
+    }
+
+    #card .foot {
+      margin-top: 1.3rem;
+      font-size: 0.78rem;
+      color: #6a6a76;
+      text-align: center;
+      line-height: 1.5;
+    }
+    #card .foot a { color: var(--texto-suave); }
+
+    /* Estado de éxito */
+    #success { display: none; text-align: center; padding: 0.6rem 0; }
+    #success .check {
+      width: 72px; height: 72px;
+      margin: 0 auto 1.1rem;
+      border-radius: 50%;
+      border: 3px solid var(--verde);
+      display: flex; align-items: center; justify-content: center;
+      filter: drop-shadow(0 0 14px var(--verde-glow));
+      animation: pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
+    }
+    @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    #success .check svg { width: 34px; height: 34px; stroke: var(--verde); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    #success h2 { font-size: 1.5rem; font-weight: 900; margin-bottom: 0.5rem; }
+    #success p { color: var(--texto-suave); font-size: 0.95rem; line-height: 1.5; }
+    #success .again {
+      display: inline-block; margin-top: 1.2rem;
+      font-size: 0.82rem; color: var(--texto-suave); cursor: pointer;
+      text-decoration: underline; background: none; border: none; font-family: inherit;
+    }
+
+    /* Accesibilidad: sin animaciones para quien las tiene desactivadas */
+    @media (prefers-reduced-motion: reduce) {
+      body.show-form #viewfinder,
+      body.show-form #af-frame,
+      #success .check { animation: none !important; }
+      body.show-form #af-frame { opacity: 1; }
+    }
+
+    @media (max-width: 480px) {
+      .hud-bl, .hud-br { display: none; }
+      #card { padding: 1.7rem 1.4rem; }
+    }
+  </style>
+
+  <!-- Three.js desde CDN (igual que Firebase: sin build, módulos ES) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <canvas id="webgl"></canvas>
+  <div id="vignette"></div>
+  <div id="fade"></div>
+  <div id="flash"></div>
+
+  <!-- UI mínima durante la intro 3D -->
+  <div id="intro-ui">
+    <div id="intro-brand">FOCUS<span style="color:var(--verde)">.</span></div>
+    <button id="skip" type="button">Saltar intro →</button>
+    <div id="intro-hint">Enfocando…</div>
+  </div>
+
+  <!-- El "visor" de la cámara: lo que se ve al mirar por el objetivo -->
+  <div id="form-screen">
+    <div id="viewfinder">
+      <div class="grid-line grid-v" style="left: 33.33%"></div>
+      <div class="grid-line grid-v" style="left: 66.66%"></div>
+      <div class="grid-line grid-h" style="top: 33.33%"></div>
+      <div class="grid-line grid-h" style="top: 66.66%"></div>
+
+      <div class="hud hud-tl">FOCUS<span style="color:var(--verde)">.</span></div>
+      <div class="hud hud-tr">AF ●</div>
+      <div class="hud hud-bl">ISO 100&nbsp;&nbsp;f/1.8&nbsp;&nbsp;1/125</div>
+      <div class="hud hud-br"><span>2026</span><span class="battery"></span></div>
+
+      <div id="card-wrap">
+        <div id="af-frame">
+          <span class="corner tl"></span><span class="corner tr"></span>
+          <span class="corner bl"></span><span class="corner br"></span>
+        </div>
+
+        <div id="card">
+          <div id="form-view">
+            <h1>Sé de los primeros<br>en <span class="verde">enfocar</span>.</h1>
+            <p class="sub">FOCUS. está a punto de llegar. Déjanos tu nombre y tu correo y te avisaremos en cuanto abramos las puertas.</p>
+
+            <form id="waitlist-form" novalidate>
+              <div class="field">
+                <label for="wl-name">Nombre</label>
+                <input id="wl-name" name="name" type="text" maxlength="80" autocomplete="name" placeholder="Tu nombre" required>
+              </div>
+              <div class="field">
+                <label for="wl-email">Correo electrónico</label>
+                <input id="wl-email" name="email" type="email" maxlength="120" autocomplete="email" placeholder="tu@correo.com" required>
+              </div>
+              <button id="submit-btn" type="submit">Unirme a la lista de espera</button>
+              <div id="form-error" role="alert"></div>
+            </form>
+
+            <div class="foot">Solo usaremos tu correo para avisarte del lanzamiento.<br><a href="https://pablo11107.github.io/10/login.html">¿Ya tienes cuenta? Inicia sesión</a></div>
+          </div>
+
+          <div id="success">
+            <div class="check">
+              <svg viewBox="0 0 24 24"><polyline points="4 12.5 10 18.5 20 6.5"/></svg>
+            </div>
+            <h2>¡Enfocado!</h2>
+            <p>Ya estás en la lista de espera.<br>Te avisaremos en cuanto FOCUS. esté listo.</p>
+            <button class="again" type="button" onclick="location.reload()">Volver a ver la cámara</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // =====================================================
+    // 1) ESCENA 3D — cámara compacta estilo G7X con marca FOCUS.
+    //    Recorrido "dron" alrededor de la cámara que acaba
+    //    mirando por el objetivo, y de ahí al formulario.
+    // =====================================================
+    import * as THREE from 'three';
+    import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    const $ = (id) => document.getElementById(id);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let formShown = false;
+    function showForm() {
+      if (formShown) return;
+      formShown = true;
+      document.body.classList.add('show-form');
+      // Dar el foco al primer campo cuando la animación de enfoque termina
+      setTimeout(() => $('wl-name').focus({ preventScroll: true }), reduceMotion ? 100 : 2000);
+    }
+
+    $('skip').addEventListener('click', showForm);
+
+    // Sin animaciones (accesibilidad) → directos al formulario
+    if (reduceMotion) {
+      $('fade').style.opacity = '0';
+      showForm();
+    } else {
+      startScene().catch((err) => {
+        // Si WebGL falla (navegador antiguo, GPU bloqueada…), la página
+        // sigue siendo útil: mostramos el formulario directamente.
+        console.error('No se pudo iniciar la escena 3D:', err);
+        $('fade').style.opacity = '0';
+        showForm();
+      });
+    }
+
+    async function startScene() {
+      // Esperar la fuente para que los textos pintados en canvas salgan bien
+      try { await document.fonts.ready; } catch (e) { /* no pasa nada */ }
+
+      const canvas = $('webgl');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+
+      const scene = new THREE.Scene();
+
+      // Entorno PBR para que los metales y la lente reflejen algo real
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+      const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.05, 60);
+
+      // ---------- Luces ----------
+      const key = new THREE.SpotLight(0xffffff, 160, 0, 0.55, 0.6);
+      key.position.set(4, 6, 5);
+      key.castShadow = true;
+      key.shadow.mapSize.set(1024, 1024);
+      key.shadow.bias = -0.0005;
+      scene.add(key);
+
+      const rim = new THREE.DirectionalLight(0x8fa4ff, 2.2);   // contraluz frío
+      rim.position.set(-4, 2.5, -4);
+      scene.add(rim);
+
+      scene.add(new THREE.AmbientLight(0x404050, 1.2));
+
+      // Suelo que solo recibe sombra (la cámara parece levitar)
+      const ground = new THREE.Mesh(
+        new THREE.CircleGeometry(9, 48),
+        new THREE.ShadowMaterial({ opacity: 0.32 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.9;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // Motas de polvo flotando, muy sutiles
+      const dust = (() => {
+        const n = 140, pos = new Float32Array(n * 3);
+        for (let i = 0; i < n * 3; i++) pos[i] = (Math.random() - 0.5) * 13;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        const mat = new THREE.PointsMaterial({
+          color: 0x8fa4ff, size: 0.025, transparent: true, opacity: 0.35,
+          blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        return new THREE.Points(geo, mat);
+      })();
+      scene.add(dust);
+
+      // ---------- La cámara FOCUS. (modelada con primitivas) ----------
+      const model = buildFocusCamera();
+      scene.add(model);
+
+      // Punto exacto de la lente, para el plano final
+      const CENTER = new THREE.Vector3(0, 0, 0);
+      const LENS = new THREE.Vector3(0, -0.02, 0.78);
+
+      // ---------- Recorrido tipo dron ----------
+      const v = (x, y, z) => new THREE.Vector3(x, y, z);
+      const curve = new THREE.CatmullRomCurve3([
+        v(3.4, 1.5, 4.0),    // arranque: tres cuartos frontal
+        v(4.3, 0.5, -0.8),   // barrido por el lateral derecho
+        v(0.6, 2.7, -3.9),   // pasada elevada por detrás
+        v(-3.9, 1.1, -1.2),  // lateral izquierdo
+        v(-3.4, -0.5, 2.4),  // picado bajo, frontal-izquierda
+        v(-1.4, 0.9, 3.8),   // remonta
+        v(0, 0.06, 3.4)      // se centra frente al objetivo
+      ], false, 'catmullrom', 0.35);
+
+      const APPR_START = v(0, 0.06, 3.4);
+      const APPR_END = v(0, LENS.y, 1.22); // pegados al cristal de la lente
+
+      const T_INTRO = 1.4, T_ORBIT = 6.4, T_APPROACH = 3.0;
+      const easeInOut = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+      const look = new THREE.Vector3();
+      const startTime = performance.now();
+      let running = true;
+
+      document.body.classList.add('intro-ready');
+
+      function animate(now) {
+        if (!running || formShown) { running = false; return; }
+        requestAnimationFrame(animate);
+
+        const t = (now - startTime) / 1000;
+        dust.rotation.y = t * 0.012;
+        const bob = Math.sin(t * 1.3) * 0.02; // levitación suave
+
+        if (t < T_INTRO) {
+          // Fundido de entrada, cámara casi quieta acercándose un pelín
+          const p = easeInOut(t / T_INTRO);
+          camera.position.copy(curve.getPoint(0)).multiplyScalar(1.14 - 0.14 * p);
+          camera.lookAt(CENTER);
+          model.position.y = bob;
+          $('fade').style.opacity = String(1 - p);
+        } else if (t < T_INTRO + T_ORBIT) {
+          // Vuelo de dron alrededor de la cámara
+          const p = easeInOut((t - T_INTRO) / T_ORBIT);
+          camera.position.copy(curve.getPoint(p));
+          look.lerpVectors(CENTER, LENS, smooth(0.86, 1, p));
+          camera.lookAt(look);
+          model.position.y = bob;
+        } else {
+          // Aproximación final: directos al cristal del objetivo
+          const p = easeInOut(Math.min(1, (t - T_INTRO - T_ORBIT) / T_APPROACH));
+          camera.position.lerpVectors(APPR_START, APPR_END, p);
+          camera.fov = 42 - 8 * p; // ligero efecto de zoom óptico
+          camera.updateProjectionMatrix();
+          camera.lookAt(LENS);
+          model.position.y = bob * (1 - p);
+          $('vignette').style.opacity = String(p * 0.95);
+
+          if (p > 0.94) {
+            running = false;
+            $('flash').classList.add('go');
+            setTimeout(showForm, 300);
+          }
+        }
+
+        renderer.render(scene, camera);
+      }
+      requestAnimationFrame(animate);
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    // =====================================================
+    // Construcción de la cámara con primitivas + texturas
+    // pintadas en canvas (logo, letras de la lente, moleteado)
+    // =====================================================
+    function buildFocusCamera() {
+      const g = new THREE.Group();
+
+      const matBody = new THREE.MeshStandardMaterial({ color: 0x15151a, metalness: 0.55, roughness: 0.42 });
+      const matDark = new THREE.MeshStandardMaterial({ color: 0x0b0b0e, metalness: 0.6, roughness: 0.35 });
+      const matMetal = new THREE.MeshStandardMaterial({ color: 0xcfd2d8, metalness: 1.0, roughness: 0.18 });
+
+      // Cuerpo (proporciones de una compacta tipo G7X)
+      const body = new THREE.Mesh(new RoundedBoxGeometry(2.1, 1.22, 0.78, 6, 0.1), matBody);
+      body.castShadow = true;
+      g.add(body);
+
+      // Placa superior en metal
+      const top = new THREE.Mesh(
+        new RoundedBoxGeometry(2.04, 0.12, 0.72, 4, 0.045),
+        new THREE.MeshStandardMaterial({ color: 0x24242c, metalness: 0.85, roughness: 0.3 })
+      );
+      top.position.y = 0.6;
+      top.castShadow = true;
+      g.add(top);
+
+      // Empuñadura sutil en el frontal derecho
+      const grip = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.95, 0.1, 3, 0.045),
+        new THREE.MeshStandardMaterial({ color: 0x101014, metalness: 0.2, roughness: 0.8 }));
+      grip.position.set(0.86, -0.04, 0.38);
+      g.add(grip);
+
+      // --- Texturas pintadas en canvas ---
+      const knurl = knurlTexture();
+
+      // Logo FOCUS. en el frontal (donde iría "Canon")
+      const logo = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.62, 0.16),
+        new THREE.MeshBasicMaterial({ map: logoTexture(), transparent: true })
+      );
+      logo.position.set(-0.63, 0.33, 0.396);
+      g.add(logo);
+
+      // --- Objetivo: anillos apilados mirando a +Z ---
+      const lens = new THREE.Group();
+      lens.position.set(0, -0.02, 0);
+      g.add(lens);
+
+      const cyl = (r, len, z, mat) => {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 48), mat);
+        m.rotation.x = Math.PI / 2;
+        m.position.z = z;
+        m.castShadow = true;
+        lens.add(m);
+        return m;
+      };
+
+      cyl(0.53, 0.06, 0.40, matBody);                    // aro base
+      cyl(0.545, 0.02, 0.435, matMetal);                 // filo cromado
+      // Anillo de control moleteado
+      const ringSide = new THREE.MeshStandardMaterial({ map: knurl, color: 0x9a9aa2, metalness: 0.7, roughness: 0.45 });
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.13, 64), [ringSide, matDark, matDark]);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.z = 0.51;
+      ring.castShadow = true;
+      lens.add(ring);
+      cyl(0.46, 0.17, 0.655, matDark);                   // barrilete
+      cyl(0.425, 0.06, 0.745, matBody);                  // bisel frontal
+
+      // Cara frontal de la lente: aros + letras + cristal pintados
+      const face = new THREE.Mesh(
+        new THREE.CircleGeometry(0.425, 64),
+        new THREE.MeshBasicMaterial({ map: lensFaceTexture() })
+      );
+      face.position.z = 0.776;
+      lens.add(face);
+
+      // Bombeo de cristal por encima, para capturar reflejos del entorno
+      const glass = new THREE.Mesh(
+        new THREE.SphereGeometry(0.34, 48, 24),
+        new THREE.MeshPhysicalMaterial({
+          color: 0x0a0d1e, metalness: 0, roughness: 0.06,
+          clearcoat: 1, clearcoatRoughness: 0.08,
+          transparent: true, opacity: 0.5
+        })
+      );
+      glass.scale.set(1, 1, 0.22);
+      glass.position.z = 0.77;
+      lens.add(glass);
+
+      // --- Mandos superiores ---
+      const dialSide = new THREE.MeshStandardMaterial({ map: knurl, color: 0x808088, metalness: 0.75, roughness: 0.4 });
+      const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.07, 40), [dialSide, matDark, matDark]);
+      dial.position.set(0.74, 0.68, -0.08);
+      dial.castShadow = true;
+      g.add(dial);
+
+      const zoomRing = new THREE.Mesh(new THREE.CylinderGeometry(0.145, 0.145, 0.045, 32), matMetal);
+      zoomRing.position.set(0.4, 0.665, 0.14);
+      g.add(zoomRing);
+      const shutter = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.055, 32), matDark);
+      shutter.position.set(0.4, 0.685, 0.14);
+      g.add(shutter);
+
+      const power = new THREE.Mesh(new RoundedBoxGeometry(0.14, 0.03, 0.08, 2, 0.012), matMetal);
+      power.position.set(0.05, 0.67, -0.1);
+      g.add(power);
+
+      // Visagra del flash (línea sutil en la placa superior izquierda)
+      const flashSeam = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.005, 0.6), matDark);
+      flashSeam.position.set(-0.62, 0.665, 0);
+      g.add(flashSeam);
+
+      return g;
+    }
+
+    // Rayado vertical para anillos y ruedas (moleteado)
+    function knurlTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 32;
+      const x = c.getContext('2d');
+      x.fillStyle = '#3a3a42'; x.fillRect(0, 0, 256, 32);
+      x.fillStyle = '#131318';
+      for (let i = 0; i < 256; i += 8) x.fillRect(i, 0, 4, 32);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.wrapS = THREE.RepeatWrapping;
+      t.repeat.set(8, 1);
+      return t;
+    }
+
+    // Logo "FOCUS." blanco para el frontal
+    function logoTexture() {
+      const c = document.createElement('canvas');
+      c.width = 620; c.height = 160;
+      const x = c.getContext('2d');
+      x.clearRect(0, 0, c.width, c.height);
+      x.fillStyle = '#f5f5f8';
+      x.font = 'italic 900 118px Inter, sans-serif';
+      x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText('FOCUS.', 310, 86);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+      return t;
+    }
+
+    // Cara frontal del objetivo: bisel con letras en arco, aros y cristal
+    function lensFaceTexture() {
+      const S = 1024, cx = S / 2, cy = S / 2;
+      const c = document.createElement('canvas');
+      c.width = S; c.height = S;
+      const x = c.getContext('2d');
+
+      // Bisel exterior
+      x.fillStyle = '#26262d';
+      x.beginPath(); x.arc(cx, cy, 512, 0, Math.PI * 2); x.fill();
+
+      // Letras en arco, como el frontal de un objetivo real
+      x.fillStyle = '#c9c9d2';
+      x.font = '600 40px Inter, sans-serif';
+      x.textAlign = 'center'; x.textBaseline = 'middle';
+      arcText(x, 'FOCUS LENS 4.2× IS', cx, cy, 462, -Math.PI * 0.78, -Math.PI * 0.22, false);
+      arcText(x, '8.8–36.8mm  1:1.8–2.8', cx, cy, 462, Math.PI * 0.78, Math.PI * 0.22, true);
+
+      // Aros interiores escalonados
+      const rings = [[430, '#101015'], [388, '#1b1b22'], [350, '#0c0c11'], [330, '#17171e']];
+      for (const [r, col] of rings) {
+        x.fillStyle = col;
+        x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+      }
+
+      // Cristal: degradado profundo azulado
+      const grad = x.createRadialGradient(cx - 70, cy - 90, 30, cx, cy, 320);
+      grad.addColorStop(0, '#2a3560');
+      grad.addColorStop(0.35, '#141b38');
+      grad.addColorStop(1, '#04040a');
+      x.fillStyle = grad;
+      x.beginPath(); x.arc(cx, cy, 318, 0, Math.PI * 2); x.fill();
+
+      // Reflejos de tratamiento de lente (irisaciones)
+      x.lineWidth = 46;
+      x.strokeStyle = 'rgba(170, 90, 255, 0.14)';
+      x.beginPath(); x.arc(cx, cy, 230, Math.PI * 1.1, Math.PI * 1.55); x.stroke();
+      x.strokeStyle = 'rgba(90, 255, 170, 0.10)';
+      x.beginPath(); x.arc(cx, cy, 160, Math.PI * 0.2, Math.PI * 0.6); x.stroke();
+
+      // Brillo especular
+      const spec = x.createRadialGradient(cx - 110, cy - 130, 5, cx - 110, cy - 130, 110);
+      spec.addColorStop(0, 'rgba(255,255,255,0.5)');
+      spec.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = spec;
+      x.beginPath(); x.arc(cx - 110, cy - 130, 110, 0, Math.PI * 2); x.fill();
+
+      // Apertura central (el iris)
+      x.fillStyle = '#020208';
+      x.beginPath(); x.arc(cx, cy, 82, 0, Math.PI * 2); x.fill();
+
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 8;
+      return t;
+    }
+
+    function arcText(x, text, cx, cy, r, a0, a1, invert) {
+      const chars = [...text];
+      for (let i = 0; i < chars.length; i++) {
+        const a = a0 + (a1 - a0) * (chars.length === 1 ? 0.5 : i / (chars.length - 1));
+        x.save();
+        x.translate(cx + Math.sin(a) * r, cy - Math.cos(a) * r);
+        x.rotate(invert ? Math.PI + a : a);
+        x.fillText(chars[i], 0, 0);
+        x.restore();
+      }
+    }
+
+    // =====================================================
+    // 2) FORMULARIO — guarda nombre + email en Firestore
+    //    Colección: waitlist/{email} (el email como ID evita duplicados)
+    // =====================================================
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getFirestore, doc, setDoc, serverTimestamp }
+      from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+    // Mismo proyecto Firebase que la app, pero esta página vive en su
+    // propio repo y no depende de firebase-init.js. La apiKey es pública
+    // por diseño; la seguridad real son las Security Rules y la
+    // restricción por referrer de la clave.
+    const db = getFirestore(initializeApp({
+      apiKey: 'AIzaSyBk0VfN4BATPOuMIB44zTOhSNya1q6uHd4',
+      authDomain: 'focus-app-2746d.firebaseapp.com',
+      projectId: 'focus-app-2746d',
+      storageBucket: 'focus-app-2746d.firebasestorage.app',
+      messagingSenderId: '940097371366',
+      appId: '1:940097371366:web:53efc673e5b563045b8f27'
+    }));
+
+    const form = $('waitlist-form');
+    const errBox = $('form-error');
+    const btn = $('submit-btn');
+
+    function showError(msg) {
+      errBox.textContent = msg;
+      errBox.style.display = 'block';
+    }
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      errBox.style.display = 'none';
+
+      const name = $('wl-name').value.trim();
+      const email = $('wl-email').value.trim().toLowerCase();
+
+      if (!name) { showError('Dinos tu nombre para poder saludarte.'); return; }
+      if (!/^[^\s@\/]+@[^\s@\/]+\.[^\s@\/]{2,}$/.test(email)) {
+        showError('Ese correo no parece válido. Revísalo, porfa.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Apuntando…';
+
+      try {
+        // El email como ID del documento: apuntarse dos veces solo
+        // sobrescribe tu propio registro, así que nunca hay duplicados.
+        await setDoc(doc(db, 'waitlist', email), {
+          name,
+          email,
+          createdAt: serverTimestamp()
+        });
+        $('form-view').style.display = 'none';
+        $('success').style.display = 'block';
+      } catch (err) {
+        console.error('Error al guardar en la lista de espera:', err);
+        showError('No hemos podido apuntarte ahora mismo. Inténtalo de nuevo en un momento.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Unirme a la lista de espera';
+      }
+    });
+  </script>
+</body>
+</html>
